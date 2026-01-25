@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, MouseEvent } from "react";
+import { Heart } from "lucide-react";
+import { getFavoriteIds, toggleFavorite } from "../utils/favorites";
 
 type Recipe = {
   id: string;
@@ -38,6 +40,9 @@ export default function Home() {
   // ✅ Toast
   const [toast, setToast] = useState<string | null>(null);
 
+  // ✅ Favorites
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => getFavoriteIds());
+
   useEffect(() => {
     const t = localStorage.getItem("toast");
     if (t) {
@@ -66,6 +71,17 @@ export default function Home() {
       .then((data) => setRecipes(data))
       .finally(() => setLoading(false));
   }, [debouncedSearch, category]);
+
+  function onToggleFavorite(e: MouseEvent, id: string) {
+    e.preventDefault(); // שלא ינווט עם ה-Link
+    e.stopPropagation();
+
+    const nowFav = toggleFavorite(id);
+    setFavoriteIds(getFavoriteIds());
+
+    setToast(nowFav ? "Added to favorites ❤️" : "Removed from favorites");
+    setTimeout(() => setToast(null), 2000);
+  }
 
   // ✅ Dynamic categories (based on current results)
   const categories = Array.from(
@@ -158,8 +174,24 @@ export default function Home() {
             <Link
               key={r.id}
               to={`/recipe/${r.id}`}
-              className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition hover:bg-white/10"
+              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition hover:bg-white/10"
             >
+              {/* ❤️ Favorite */}
+              <button
+                onClick={(e) => onToggleFavorite(e, r.id)}
+                aria-label="Toggle favorite"
+                className="absolute right-3 top-3 z-10 rounded-full border border-white/10 bg-black/50 p-2 backdrop-blur transition hover:bg-black/70"
+              >
+                <Heart
+                  size={18}
+                  className={
+                    favoriteIds.includes(r.id)
+                      ? "fill-red-500 text-red-500"
+                      : "text-white"
+                  }
+                />
+              </button>
+
               <div className="aspect-[16/10] w-full overflow-hidden bg-zinc-900">
                 {r.imageUrl ? (
                   <img
