@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../context/auth";
 
 type Recipe = {
   id: string;
@@ -10,6 +11,7 @@ type Recipe = {
   imageUrl?: string;
   ingredients: string[];
   instructions: string[];
+  ownerId?: string;
 };
 
 type RecipePayload = {
@@ -26,6 +28,8 @@ export default function AddEditRecipe() {
   const { id } = useParams();
   const isEdit = Boolean(id);
 
+  const { getToken } = useAuth();
+
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [prepMinutes, setPrepMinutes] = useState<number>(0);
@@ -37,7 +41,7 @@ export default function AddEditRecipe() {
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load existing recipe for edit
+  // Load existing recipe for edit (public endpoint)
   useEffect(() => {
     if (!isEdit || !id) return;
 
@@ -93,6 +97,13 @@ export default function AddEditRecipe() {
 
     setLoading(true);
     try {
+      const token = await getToken();
+      if (!token) {
+        localStorage.setItem("toast", "Please login first 🔐");
+        navigate("/login");
+        return;
+      }
+
       const url = isEdit
         ? `${import.meta.env.VITE_API_URL}/recipes/${id}`
         : `${import.meta.env.VITE_API_URL}/recipes`;
@@ -101,9 +112,22 @@ export default function AddEditRecipe() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
+
+      if (res.status === 401) {
+        localStorage.setItem("toast", "Session expired — please login again 🔐");
+        navigate("/login");
+        return;
+      }
+
+      if (res.status === 403) {
+        throw new Error("You can only edit your own recipes.");
+      }
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -113,7 +137,10 @@ export default function AddEditRecipe() {
       const saved = await res.json();
 
       // ✅ Toast message for Home
-      localStorage.setItem("toast", isEdit ? "Recipe updated ✅" : "Recipe created ✅");
+      localStorage.setItem(
+        "toast",
+        isEdit ? "Recipe updated ✅" : "Recipe created ✅"
+      );
 
       navigate(`/recipe/${saved.id}`);
     } catch (err: any) {
