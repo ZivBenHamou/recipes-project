@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getFavorites, toggleFavorite } from "../utils/favorites";
-
 
 type Recipe = {
   id: string;
@@ -49,12 +48,22 @@ function HeartIcon({ filled }: { filled: boolean }) {
   );
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+type SortMode = "newest" | "fastest" | "az";
+
 export default function Home() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // ✅ New filters
+  const [maxMinutes, setMaxMinutes] = useState<number>(180);
+  const [sort, setSort] = useState<SortMode>("newest");
 
   // ✅ Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -78,7 +87,7 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // ✅ Fetch
+  // ✅ Fetch (search + category stay server-side)
   useEffect(() => {
     const params = new URLSearchParams();
     if (debouncedSearch) params.set("search", debouncedSearch);
@@ -92,21 +101,42 @@ export default function Home() {
   }, [debouncedSearch, category]);
 
   function onToggleFavorite(e: React.MouseEvent, id: string) {
-    e.preventDefault(); // שלא ינווט עם ה-Link
+    e.preventDefault();
     e.stopPropagation();
 
     const nowFav = toggleFavorite(id);
     setFavoriteIds(getFavorites());
 
-
     setToast(nowFav ? "Added to favorites ❤️" : "Removed from favorites");
     setTimeout(() => setToast(null), 2000);
   }
 
-  // ✅ Dynamic categories (based on current results)
-  const categories = Array.from(
-    new Set(recipes.map((r) => r.category).filter(Boolean))
-  ).sort();
+  const categories = useMemo(() => {
+    return Array.from(new Set(recipes.map((r) => r.category).filter(Boolean))).sort();
+  }, [recipes]);
+
+  // ✅ Apply client-side filters + sort
+  const visibleRecipes = useMemo(() => {
+    let list = recipes;
+
+    // max minutes
+    const mm = clamp(maxMinutes, 0, 9999);
+    list = list.filter((r) => (Number.isFinite(r.prepMinutes) ? r.prepMinutes : 0) <= mm);
+
+    // sort
+    if (sort === "fastest") {
+      list = [...list].sort((a, b) => (a.prepMinutes ?? 0) - (b.prepMinutes ?? 0));
+    } else if (sort === "az") {
+      list = [...list].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    } else {
+      // newest: assume API already returns newest first; keep order
+      list = [...list];
+    }
+
+    return list;
+  }, [recipes, maxMinutes, sort]);
+
+  const hasActiveExtraFilters = maxMinutes !== 180 || sort !== "newest";
 
   return (
     <div className="space-y-6">
@@ -124,6 +154,13 @@ export default function Home() {
           <p className="mt-2 text-sm text-zinc-400">
             Search by name or category. Save and share your favorites.
           </p>
+
+          {!loading ? (
+            <div className="mt-3 text-xs text-zinc-400">
+              Showing <span className="text-zinc-200">{visibleRecipes.length}</span>{" "}
+              recipes
+            </div>
+          ) : null}
         </div>
 
         <Link
@@ -159,17 +196,78 @@ export default function Home() {
         </select>
       </div>
 
+      {/* Advanced filters */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {/* Max minutes */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 sm:col-span-2">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-zinc-200">Max prep time</div>
+            <div className="text-sm text-zinc-200">
+              <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200">
+                {maxMinutes} min
+              </span>
+            </div>
+          </div>
+
+          <input
+            type="range"
+            min={5}
+            max={180}
+            step={5}
+            value={maxMinutes}
+            onChange={(e) => setMaxMinutes(Number(e.target.value))}
+            className="mt-3 w-full"
+          />
+
+          <div className="mt-2 flex justify-between text-xs text-zinc-500">
+            <span>5</span>
+            <span>60</span>
+            <span>120</span>
+            <span>180</span>
+          </div>
+        </div>
+
+        {/* Sort */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+          <div className="text-sm text-zinc-200">Sort</div>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortMode)}
+            className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-white/20"
+          >
+            <option value="newest">Newest</option>
+            <option value="fastest">Fastest</option>
+            <option value="az">A–Z</option>
+          </select>
+        </div>
+
+        {/* Clear extra filters */}
+        {hasActiveExtraFilters ? (
+          <div className="sm:col-span-3">
+            <button
+              onClick={() => {
+                setMaxMinutes(180);
+                setSort("newest");
+              }}
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 hover:bg-white/10"
+            >
+              Reset advanced filters
+            </button>
+          </div>
+        ) : null}
+      </div>
+
       {/* Content */}
       {loading ? (
         <SkeletonGrid />
-      ) : recipes.length === 0 ? (
+      ) : visibleRecipes.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8">
           <div className="text-lg font-semibold tracking-tight">No recipes found</div>
           <div className="mt-2 text-sm text-zinc-400">
             Try clearing filters, or create your first recipe.
           </div>
 
-          <div className="mt-5 flex gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <Link
               to="/add"
               className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200"
@@ -181,6 +279,8 @@ export default function Home() {
               onClick={() => {
                 setSearch("");
                 setCategory("");
+                setMaxMinutes(180);
+                setSort("newest");
               }}
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 hover:bg-white/10"
             >
@@ -190,7 +290,7 @@ export default function Home() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {recipes.map((r) => {
+          {visibleRecipes.map((r) => {
             const fav = favoriteIds.includes(r.id);
 
             return (
