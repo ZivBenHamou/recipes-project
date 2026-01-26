@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState, MouseEvent } from "react";
-import { Heart } from "lucide-react";
-import { getFavoriteIds, toggleFavorite } from "../utils/favorites";
+import { useEffect, useState } from "react";
+import { getFavorites, toggleFavorite } from "../utils/favorites";
+
 
 type Recipe = {
   id: string;
@@ -30,6 +30,25 @@ function SkeletonGrid() {
   );
 }
 
+function HeartIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      className={filled ? "text-red-500" : "text-white"}
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20.8 4.6c-1.5-1.5-3.9-1.5-5.4 0L12 8l-3.4-3.4c-1.5-1.5-3.9-1.5-5.4 0s-1.5 3.9 0 5.4L12 21.8 20.8 10c1.5-1.5 1.5-3.9 0-5.4z" />
+    </svg>
+  );
+}
+
 export default function Home() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [search, setSearch] = useState("");
@@ -41,7 +60,7 @@ export default function Home() {
   const [toast, setToast] = useState<string | null>(null);
 
   // ✅ Favorites
-  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => getFavoriteIds());
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => getFavorites());
 
   useEffect(() => {
     const t = localStorage.getItem("toast");
@@ -72,12 +91,13 @@ export default function Home() {
       .finally(() => setLoading(false));
   }, [debouncedSearch, category]);
 
-  function onToggleFavorite(e: MouseEvent, id: string) {
+  function onToggleFavorite(e: React.MouseEvent, id: string) {
     e.preventDefault(); // שלא ינווט עם ה-Link
     e.stopPropagation();
 
     const nowFav = toggleFavorite(id);
-    setFavoriteIds(getFavoriteIds());
+    setFavoriteIds(getFavorites());
+
 
     setToast(nowFav ? "Added to favorites ❤️" : "Removed from favorites");
     setTimeout(() => setToast(null), 2000);
@@ -170,61 +190,58 @@ export default function Home() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {recipes.map((r) => (
-            <Link
-              key={r.id}
-              to={`/recipe/${r.id}`}
-              className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition hover:bg-white/10"
-            >
-              {/* ❤️ Favorite */}
-              <button
-                onClick={(e) => onToggleFavorite(e, r.id)}
-                aria-label="Toggle favorite"
-                className="absolute right-3 top-3 z-10 rounded-full border border-white/10 bg-black/50 p-2 backdrop-blur transition hover:bg-black/70"
+          {recipes.map((r) => {
+            const fav = favoriteIds.includes(r.id);
+
+            return (
+              <Link
+                key={r.id}
+                to={`/recipe/${r.id}`}
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition hover:bg-white/10"
               >
-                <Heart
-                  size={18}
-                  className={
-                    favoriteIds.includes(r.id)
-                      ? "fill-red-500 text-red-500"
-                      : "text-white"
-                  }
-                />
-              </button>
+                {/* ❤️ Favorite */}
+                <button
+                  onClick={(e) => onToggleFavorite(e, r.id)}
+                  aria-label={fav ? "Remove from favorites" : "Add to favorites"}
+                  className="absolute right-3 top-3 z-10 rounded-full border border-white/10 bg-black/50 p-2 backdrop-blur transition hover:bg-black/70"
+                >
+                  <HeartIcon filled={fav} />
+                </button>
 
-              <div className="aspect-[16/10] w-full overflow-hidden bg-zinc-900">
-                {r.imageUrl ? (
-                  <img
-                    src={r.imageUrl}
-                    alt={r.title}
-                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
-                    No image
+                <div className="aspect-[16/10] w-full overflow-hidden bg-zinc-900">
+                  {r.imageUrl ? (
+                    <img
+                      src={r.imageUrl}
+                      alt={r.title}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
+                      No image
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="line-clamp-1 text-base font-semibold tracking-tight">
+                      {r.title}
+                    </h3>
+                    <span className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200">
+                      {r.prepMinutes} min
+                    </span>
                   </div>
-                )}
-              </div>
 
-              <div className="space-y-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="line-clamp-1 text-base font-semibold tracking-tight">
-                    {r.title}
-                  </h3>
-                  <span className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200">
-                    {r.prepMinutes} min
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400">{r.category}</span>
+                    <span className="text-xs text-zinc-400 group-hover:text-zinc-200">
+                      Open →
+                    </span>
+                  </div>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-400">{r.category}</span>
-                  <span className="text-xs text-zinc-400 group-hover:text-zinc-200">
-                    Open →
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
