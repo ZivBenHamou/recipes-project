@@ -11,12 +11,15 @@ dotenv.config();
    Firebase Admin init
 ========================= */
 const sa = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+let firebaseReady = false;
 if (!sa) {
   console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_JSON is missing (auth will fail)");
 } else {
   admin.initializeApp({
     credential: admin.credential.cert(JSON.parse(sa)),
   });
+  firebaseReady = true;
 }
 
 /* =========================
@@ -26,10 +29,7 @@ const app = express();
 app.use(express.json());
 
 // ✅ CORS
-const allowed = [
-  process.env.CLIENT_URL,
-  "http://localhost:5173",
-].filter(Boolean);
+const allowed = [process.env.CLIENT_URL, "http://localhost:5173"].filter(Boolean);
 
 app.use(
   cors({
@@ -62,18 +62,23 @@ async function connectDB() {
 ========================= */
 async function requireAuth(req, res, next) {
   try {
+    if (!firebaseReady) {
+      return res.status(500).json({ message: "Auth is not configured on server" });
+    }
+
     const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ")
-      ? header.slice(7)
-      : null;
+    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 
     if (!token) {
       return res.status(401).json({ message: "Missing auth token" });
     }
 
     const decoded = await admin.auth().verifyIdToken(token);
+
+    // decoded can have: uid, email, name, firebase.sign_in_provider etc.
     req.user = {
       uid: decoded.uid,
+      email: decoded.email || "",
       name: decoded.name || decoded.email || "",
     };
 
@@ -127,6 +132,12 @@ app.get("/recipes/:id", async (req, res) => {
 
 /* -------- Protected -------- */
 
+// GET my recipes (only logged in user)
+app.get("/me/recipes", requireAuth, async (req, res) => {
+  const recipes = await Recipe.find({ ownerId: req.user.uid }).sort({ createdAt: -1 });
+  res.json(recipes.map((r) => ({ ...r.toObject(), id: r._id.toString() })));
+});
+
 // CREATE recipe (logged in)
 app.post("/recipes", requireAuth, async (req, res) => {
   const { title, category, prepMinutes, imageUrl, ingredients, instructions } =
@@ -145,7 +156,8 @@ app.post("/recipes", requireAuth, async (req, res) => {
     instructions: Array.isArray(instructions) ? instructions : [],
 
     ownerId: req.user.uid,
-    ownerName: req.user.name,
+    ownerName: req.user.name || "",
+    ownerEmail: req.user.email || "",
   });
 
   res.status(201).json({ ...doc.toObject(), id: doc._id.toString() });
@@ -163,6 +175,11 @@ app.put("/recipes/:id", requireAuth, async (req, res) => {
   const recipe = await Recipe.findById(req.params.id);
   if (!recipe) {
     return res.status(404).json({ message: "Recipe not found" });
+  }
+
+  // recipes created before auth feature might have no ownerId
+  if (!recipe.ownerId) {
+    return res.status(403).json({ message: "This recipe has no owner (legacy)" });
   }
 
   if (recipe.ownerId !== req.user.uid) {
@@ -185,6 +202,10 @@ app.delete("/recipes/:id", requireAuth, async (req, res) => {
   const recipe = await Recipe.findById(req.params.id);
   if (!recipe) {
     return res.status(404).json({ message: "Recipe not found" });
+  }
+
+  if (!recipe.ownerId) {
+    return res.status(403).json({ message: "This recipe has no owner (legacy)" });
   }
 
   if (recipe.ownerId !== req.user.uid) {

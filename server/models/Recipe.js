@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const RecipeSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true, trim: true },
+    title: { type: String, default: "", trim: true },
     category: { type: String, required: true, trim: true },
     prepMinutes: { type: Number, default: 0 },
     imageUrl: { type: String, default: "" },
@@ -12,6 +12,8 @@ const RecipeSchema = new mongoose.Schema(
     // ✅ NEW: ownership
     ownerId: { type: String, required: true, index: true },
     ownerName: { type: String, default: "" }, // אופציונלי (להצגה)
+    ownerEmail: { type: String, default: "" },
+
   },
   { timestamps: true }
 );
