@@ -36,37 +36,75 @@ export default function Profile() {
   const nav = useNavigate();
   const { getToken } = useAuth();
 
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [loading, setLoading] = useState(true);
+  // ✅ My recipes (from /me/recipes)
+  const [myRecipes, setMyRecipes] = useState<Recipe[]>([]);
+  const [loadingMy, setLoadingMy] = useState(true);
+
+  // ✅ All recipes (needed for Favorites tab)
+  const [allRecipes, setAllRecipes] = useState<Recipe[]>([]);
+  const [loadingAll, setLoadingAll] = useState(true);
+
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Tabs
   const [tab, setTab] = useState<"my" | "favorites">("my");
 
-  // Favorites
+  // Favorites (local)
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => getFavorites());
 
-  async function load() {
-    setLoading(true);
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/recipes`);
-    const data = await res.json();
-    setRecipes(data);
-    setLoading(false);
+  async function loadAllRecipes() {
+    setLoadingAll(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/recipes`);
+      const data = await res.json();
+      setAllRecipes(Array.isArray(data) ? data : []);
+    } finally {
+      setLoadingAll(false);
+    }
+  }
+
+  async function loadMyRecipes() {
+    setLoadingMy(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        // לא מפנים ישר — כדי שאפשר עדיין לראות Favorites
+        setMyRecipes([]);
+        return;
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/me/recipes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.status === 401) {
+        // סשן נגמר
+        setMyRecipes([]);
+        return;
+      }
+
+      const data = await res.json();
+      setMyRecipes(Array.isArray(data) ? data : []);
+    } finally {
+      setLoadingMy(false);
+    }
   }
 
   useEffect(() => {
-    load();
+    loadAllRecipes();
+    loadMyRecipes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // refresh favorites when switching tabs (וגם אם חזרת לעמוד)
+  // refresh favorites when switching tabs / returning to page
   useEffect(() => {
     setFavoriteIds(getFavorites());
   }, [tab]);
 
   const favoriteRecipes = useMemo(() => {
     const favSet = new Set(favoriteIds);
-    return recipes.filter((r) => favSet.has(r.id));
-  }, [recipes, favoriteIds]);
+    return allRecipes.filter((r) => favSet.has(r.id));
+  }, [allRecipes, favoriteIds]);
 
   async function onDelete(id: string) {
     const ok = confirm("Delete this recipe?");
@@ -89,7 +127,10 @@ export default function Profile() {
       });
 
       if (res.status === 401) {
-        localStorage.setItem("toast", "Session expired — please login again 🔐");
+        localStorage.setItem(
+          "toast",
+          "Session expired — please login again 🔐"
+        );
         nav("/login");
         return;
       }
@@ -101,7 +142,9 @@ export default function Profile() {
 
       if (!res.ok) throw new Error("Failed to delete");
 
-      await load();
+      // ✅ refresh both lists
+      await loadMyRecipes();
+      await loadAllRecipes();
     } finally {
       setDeletingId(null);
     }
@@ -114,8 +157,13 @@ export default function Profile() {
     setFavoriteIds(getFavorites());
   }
 
+  const myCount = myRecipes.length;
+
+  // מצב נוח: אם אין טוקן, נסביר יפה במקום "ריק"
+  const shouldShowLoginHint = !loadingMy && myRecipes.length === 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
@@ -144,7 +192,7 @@ export default function Profile() {
         >
           My recipes{" "}
           <span className="ml-2 rounded-lg bg-white/10 px-2 py-0.5 text-xs text-zinc-200">
-            {recipes.length}
+            {myCount}
           </span>
         </button>
 
@@ -164,14 +212,36 @@ export default function Profile() {
       </div>
 
       {/* Content */}
-      {loading ? (
-        <div className="text-sm text-zinc-400">Loading…</div>
-      ) : tab === "my" ? (
-        recipes.length === 0 ? (
-          <div className="text-sm text-zinc-400">No recipes yet.</div>
+      {tab === "my" ? (
+        loadingMy ? (
+          <div className="text-sm text-zinc-400">Loading…</div>
+        ) : myRecipes.length === 0 ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-8">
+            <div className="text-lg font-semibold tracking-tight">
+              {shouldShowLoginHint ? "No recipes yet (or not logged in)" : "No recipes yet"}
+            </div>
+            <div className="mt-2 text-sm text-zinc-400">
+              Create your first recipe — or login to see your recipes.
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                to="/add"
+                className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200"
+              >
+                + Add recipe
+              </Link>
+              <Link
+                to="/login"
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 hover:bg-white/10"
+              >
+                Login
+              </Link>
+            </div>
+          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {recipes.map((r) => (
+            {myRecipes.map((r) => (
               <div
                 key={r.id}
                 className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
@@ -225,6 +295,8 @@ export default function Profile() {
             ))}
           </div>
         )
+      ) : loadingAll ? (
+        <div className="text-sm text-zinc-400">Loading…</div>
       ) : favoriteIds.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8">
           <div className="text-lg font-semibold tracking-tight">
@@ -249,8 +321,8 @@ export default function Profile() {
             Favorites not found
           </div>
           <div className="mt-2 text-sm text-zinc-400">
-            It looks like some favorite recipes were deleted. Remove them from
-            favorites by un-favoriting on the home page (or add new favorites).
+            Some favorites were deleted. Unfavorite them on the home page and
+            add new favorites.
           </div>
         </div>
       ) : (

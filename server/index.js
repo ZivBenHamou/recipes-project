@@ -63,19 +63,18 @@ async function connectDB() {
 async function requireAuth(req, res, next) {
   try {
     if (!firebaseReady) {
-      return res.status(500).json({ message: "Auth is not configured on server" });
+      return res
+        .status(500)
+        .json({ message: "Auth is not configured on server" });
     }
 
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 
-    if (!token) {
-      return res.status(401).json({ message: "Missing auth token" });
-    }
+    if (!token) return res.status(401).json({ message: "Missing auth token" });
 
     const decoded = await admin.auth().verifyIdToken(token);
 
-    // decoded can have: uid, email, name, firebase.sign_in_provider etc.
     req.user = {
       uid: decoded.uid,
       email: decoded.email || "",
@@ -86,6 +85,13 @@ async function requireAuth(req, res, next) {
   } catch (err) {
     return res.status(401).json({ message: "Invalid auth token" });
   }
+}
+
+/* =========================
+   Helpers
+========================= */
+function withId(doc) {
+  return { ...doc.toObject(), id: doc._id.toString() };
 }
 
 /* =========================
@@ -120,22 +126,24 @@ app.get("/recipes", async (req, res) => {
   }
 
   const recipes = await Recipe.find(filter).sort({ createdAt: -1 });
-  res.json(recipes.map((r) => ({ ...r.toObject(), id: r._id.toString() })));
+  res.json(recipes.map(withId));
 });
 
 // GET single recipe (public)
 app.get("/recipes/:id", async (req, res) => {
   const recipe = await Recipe.findById(req.params.id);
   if (!recipe) return res.status(404).json({ message: "Recipe not found" });
-  res.json({ ...recipe.toObject(), id: recipe._id.toString() });
+  res.json(withId(recipe));
 });
 
 /* -------- Protected -------- */
 
 // GET my recipes (only logged in user)
 app.get("/me/recipes", requireAuth, async (req, res) => {
-  const recipes = await Recipe.find({ ownerId: req.user.uid }).sort({ createdAt: -1 });
-  res.json(recipes.map((r) => ({ ...r.toObject(), id: r._id.toString() })));
+  const recipes = await Recipe.find({ ownerId: req.user.uid }).sort({
+    createdAt: -1,
+  });
+  res.json(recipes.map(withId));
 });
 
 // CREATE recipe (logged in)
@@ -160,7 +168,7 @@ app.post("/recipes", requireAuth, async (req, res) => {
     ownerEmail: req.user.email || "",
   });
 
-  res.status(201).json({ ...doc.toObject(), id: doc._id.toString() });
+  res.status(201).json(withId(doc));
 });
 
 // UPDATE recipe (only owner)
@@ -173,11 +181,9 @@ app.put("/recipes/:id", requireAuth, async (req, res) => {
   }
 
   const recipe = await Recipe.findById(req.params.id);
-  if (!recipe) {
-    return res.status(404).json({ message: "Recipe not found" });
-  }
+  if (!recipe) return res.status(404).json({ message: "Recipe not found" });
 
-  // recipes created before auth feature might have no ownerId
+  // אם מתכון ישן בלי ownerId — אסור לערוך (או שאפשר “לאמץ”, אבל נשאיר פשוט)
   if (!recipe.ownerId) {
     return res.status(403).json({ message: "This recipe has no owner (legacy)" });
   }
@@ -194,15 +200,13 @@ app.put("/recipes/:id", requireAuth, async (req, res) => {
   recipe.instructions = Array.isArray(instructions) ? instructions : [];
 
   const updated = await recipe.save();
-  res.json({ ...updated.toObject(), id: updated._id.toString() });
+  res.json(withId(updated));
 });
 
 // DELETE recipe (only owner)
 app.delete("/recipes/:id", requireAuth, async (req, res) => {
   const recipe = await Recipe.findById(req.params.id);
-  if (!recipe) {
-    return res.status(404).json({ message: "Recipe not found" });
-  }
+  if (!recipe) return res.status(404).json({ message: "Recipe not found" });
 
   if (!recipe.ownerId) {
     return res.status(403).json({ message: "This recipe has no owner (legacy)" });

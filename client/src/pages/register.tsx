@@ -26,7 +26,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-md space-y-6">
+    <div className="mx-auto max-w-md space-y-6 animate-fade-in" >
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
         <p className="mt-2 text-sm text-zinc-400">

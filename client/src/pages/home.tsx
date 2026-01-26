@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";
 import { getFavorites, toggleFavorite } from "../utils/favorites";
 
 type Recipe = {
@@ -16,7 +17,7 @@ function SkeletonGrid() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+          className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:-translate-y-0.5 hover:bg-white/10"
         >
           <div className="aspect-[16/10] w-full animate-pulse bg-white/10" />
           <div className="space-y-3 p-4">
@@ -100,7 +101,7 @@ export default function Home() {
       .finally(() => setLoading(false));
   }, [debouncedSearch, category]);
 
-  function onToggleFavorite(e: React.MouseEvent, id: string) {
+  function onToggleFavorite(e: MouseEvent, id: string) {
     e.preventDefault();
     e.stopPropagation();
 
@@ -119,17 +120,16 @@ export default function Home() {
   const visibleRecipes = useMemo(() => {
     let list = recipes;
 
-    // max minutes
     const mm = clamp(maxMinutes, 0, 9999);
-    list = list.filter((r) => (Number.isFinite(r.prepMinutes) ? r.prepMinutes : 0) <= mm);
+    list = list.filter(
+      (r) => (Number.isFinite(r.prepMinutes) ? r.prepMinutes : 0) <= mm
+    );
 
-    // sort
     if (sort === "fastest") {
       list = [...list].sort((a, b) => (a.prepMinutes ?? 0) - (b.prepMinutes ?? 0));
     } else if (sort === "az") {
       list = [...list].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
     } else {
-      // newest: assume API already returns newest first; keep order
       list = [...list];
     }
 
@@ -139,10 +139,10 @@ export default function Home() {
   const hasActiveExtraFilters = maxMinutes !== 180 || sort !== "newest";
 
   return (
-    <div className="space-y-6">
-      {/* ✅ Toast UI */}
+    <div className="space-y-6 animate-fade-in">
+      {/* Toast */}
       {toast ? (
-        <div className="fixed right-6 top-20 z-50 rounded-xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 shadow-lg">
+        <div className="fixed right-6 top-20 z-50 rounded-xl border border-white/10 bg-zinc-900/90 px-4 py-3 text-sm text-zinc-100 shadow-lg backdrop-blur">
           {toast}
         </div>
       ) : null}
@@ -165,7 +165,7 @@ export default function Home() {
 
         <Link
           to="/add"
-          className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-200"
+          className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-zinc-200 active:scale-[0.98]"
         >
           + Add recipe
         </Link>
@@ -249,7 +249,7 @@ export default function Home() {
                 setMaxMinutes(180);
                 setSort("newest");
               }}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 hover:bg-white/10"
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10 active:scale-[0.98]"
             >
               Reset advanced filters
             </button>
@@ -270,7 +270,7 @@ export default function Home() {
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               to="/add"
-              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200"
+              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 active:scale-[0.98]"
             >
               + Add recipe
             </Link>
@@ -282,7 +282,7 @@ export default function Home() {
                 setMaxMinutes(180);
                 setSort("newest");
               }}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 hover:bg-white/10"
+              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10 active:scale-[0.98]"
             >
               Clear filters
             </button>
@@ -297,13 +297,13 @@ export default function Home() {
               <Link
                 key={r.id}
                 to={`/recipe/${r.id}`}
-                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition hover:bg-white/10"
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm transition hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-lg"
               >
                 {/* ❤️ Favorite */}
                 <button
                   onClick={(e) => onToggleFavorite(e, r.id)}
                   aria-label={fav ? "Remove from favorites" : "Add to favorites"}
-                  className="absolute right-3 top-3 z-10 rounded-full border border-white/10 bg-black/50 p-2 backdrop-blur transition hover:bg-black/70"
+                  className="absolute right-3 top-3 z-10 rounded-full border border-white/10 bg-black/50 p-2 text-zinc-100 backdrop-blur transition hover:bg-black/70 active:scale-95"
                 >
                   <HeartIcon filled={fav} />
                 </button>
@@ -334,7 +334,7 @@ export default function Home() {
 
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-zinc-400">{r.category}</span>
-                    <span className="text-xs text-zinc-400 group-hover:text-zinc-200">
+                    <span className="text-xs text-zinc-400 transition group-hover:text-zinc-200">
                       Open →
                     </span>
                   </div>

@@ -54,6 +54,44 @@ function ChefHatIcon() {
   );
 }
 
+function RecipeSkeleton() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="h-5 w-24 animate-pulse rounded bg-white/10" />
+
+      <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
+        <div className="aspect-[16/7] w-full animate-pulse bg-white/10" />
+
+        <div className="grid gap-6 p-6 lg:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="h-4 w-28 animate-pulse rounded bg-white/10" />
+            <div className="mt-4 space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-3 w-5/6 animate-pulse rounded bg-white/10"
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="h-4 w-28 animate-pulse rounded bg-white/10" />
+            <div className="mt-4 space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-3 w-11/12 animate-pulse rounded bg-white/10"
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function kitchenKey(recipeId: string) {
   return `kitchenProgress:${recipeId}`;
 }
@@ -114,7 +152,9 @@ export default function RecipePage() {
         showToast("Shared ✅");
         return;
       }
-    } catch {}
+    } catch {
+      // fall back to copy
+    }
 
     try {
       await navigator.clipboard.writeText(url);
@@ -134,7 +174,9 @@ export default function RecipePage() {
     try {
       const raw = localStorage.getItem(kitchenKey(recipe.id));
       if (raw) restored = JSON.parse(raw);
-    } catch {}
+    } catch {
+      restored = null;
+    }
 
     setIngredientsDone(
       Array.from({ length: ingLen }, (_, i) => !!restored?.ingredientsDone?.[i])
@@ -147,22 +189,27 @@ export default function RecipePage() {
   useEffect(() => {
     if (!recipe) return;
     const payload: KitchenProgress = { ingredientsDone, stepsDone };
-    localStorage.setItem(kitchenKey(recipe.id), JSON.stringify(payload));
+    try {
+      localStorage.setItem(kitchenKey(recipe.id), JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
   }, [recipe, ingredientsDone, stepsDone]);
 
   const progress = useMemo(() => {
     const total = ingredientsDone.length + stepsDone.length;
     const done =
-      ingredientsDone.filter(Boolean).length +
-      stepsDone.filter(Boolean).length;
+      ingredientsDone.filter(Boolean).length + stepsDone.filter(Boolean).length;
     return total === 0 ? 0 : Math.round((done / total) * 100);
   }, [ingredientsDone, stepsDone]);
 
-  if (loading) return <div className="text-sm text-zinc-400">Loading recipe…</div>;
+  if (loading) {
+    return <RecipeSkeleton />;
+  }
 
   if (notFound || !recipe) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 animate-fade-in">
         <Link to="/" className="text-sm text-zinc-400 hover:text-zinc-200">
           ← Back
         </Link>
@@ -176,19 +223,28 @@ export default function RecipePage() {
   const author = recipe.ownerName || recipe.ownerEmail;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
+      {/* Toast */}
       {toast && (
-        <div className="fixed right-6 top-20 z-50 rounded-xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm">
+        <div className="fixed right-6 top-20 z-50 rounded-xl border border-white/10 bg-zinc-900/90 px-4 py-3 text-sm text-zinc-100 shadow-lg backdrop-blur">
           {toast}
         </div>
       )}
 
-      <Link to="/" className="text-sm text-zinc-400 hover:text-zinc-200">
+      <Link
+        to="/"
+        className="inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-zinc-200"
+      >
         ← Back
       </Link>
 
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-        <div className="relative aspect-[16/7] bg-zinc-900">
+        {/* Hero */}
+        <div
+          className={`relative aspect-[16/7] bg-zinc-900 transition-all duration-300 ${
+            kitchenMode ? "scale-[0.98]" : "scale-100"
+          }`}
+        >
           {recipe.imageUrl && !kitchenMode && (
             <img
               src={recipe.imageUrl}
@@ -201,22 +257,22 @@ export default function RecipePage() {
 
           <div className="absolute bottom-0 left-0 right-0 p-6">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-zinc-100">
                 {recipe.category}
               </span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-zinc-100">
                 {recipe.prepMinutes} min
               </span>
 
               {author && (
-                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs">
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-zinc-100">
                   By {author}
                 </span>
               )}
 
               <button
                 onClick={() => setKitchenMode((v) => !v)}
-                className="ml-auto inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs"
+                className="ml-auto inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-zinc-100 transition hover:bg-white/15 active:scale-[0.97]"
               >
                 <ChefHatIcon />
                 {kitchenMode ? "Exit kitchen" : "Kitchen mode"}
@@ -224,19 +280,25 @@ export default function RecipePage() {
 
               <button
                 onClick={onShare}
-                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs"
+                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-zinc-100 transition hover:bg-white/15 active:scale-[0.97]"
               >
                 <ShareIcon />
                 Share
               </button>
             </div>
 
-            <h1 className="mt-3 text-3xl font-semibold">{recipe.title}</h1>
+            <h1
+              className={`mt-3 font-semibold tracking-tight transition-all duration-300 ${
+                kitchenMode ? "text-4xl" : "text-3xl"
+              }`}
+            >
+              {recipe.title}
+            </h1>
 
             {kitchenMode && (
               <div className="mt-3 h-2 w-44 overflow-hidden rounded-full bg-white/10">
                 <div
-                  className="h-full bg-white/40"
+                  className="h-full bg-white/40 transition-all duration-300"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -244,21 +306,20 @@ export default function RecipePage() {
           </div>
         </div>
 
+        {/* Body */}
         <div className="grid gap-6 p-6 lg:grid-cols-2">
-          {/* Ingredients */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <div className="text-sm font-semibold">Ingredients</div>
-            <ul className="mt-3 space-y-2 text-sm">
+            <ul className="mt-3 space-y-2 text-sm text-zinc-100">
               {recipe.ingredients.map((x, i) => (
                 <li key={i}>• {x}</li>
               ))}
             </ul>
           </div>
 
-          {/* Instructions */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <div className="text-sm font-semibold">Instructions</div>
-            <ol className="mt-3 list-decimal space-y-2 pl-4 text-sm">
+            <ol className="mt-3 list-decimal space-y-2 pl-4 text-sm text-zinc-100">
               {recipe.instructions.map((x, i) => (
                 <li key={i}>{x}</li>
               ))}

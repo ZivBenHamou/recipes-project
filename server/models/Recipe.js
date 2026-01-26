@@ -9,11 +9,10 @@ const RecipeSchema = new mongoose.Schema(
     ingredients: { type: [String], default: [] },
     instructions: { type: [String], default: [] },
 
-    // ✅ NEW: ownership
-    ownerId: { type: String, required: true, index: true },
-    ownerName: { type: String, default: "" }, // אופציונלי (להצגה)
+    // ✅ ownership (לא required כדי לא לשבור מתכונים ישנים)
+    ownerId: { type: String, default: "", index: true },
+    ownerName: { type: String, default: "" },
     ownerEmail: { type: String, default: "" },
-
   },
   { timestamps: true }
 );
