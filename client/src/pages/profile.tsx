@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import type { MouseEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { getFavorites, toggleFavorite } from "../utils/favorites";
+import { useAuth } from "../context/auth";
 
 type Recipe = {
   id: string;
@@ -8,6 +10,7 @@ type Recipe = {
   category: string;
   prepMinutes: number;
   imageUrl?: string;
+  ownerId?: string;
 };
 
 function HeartIcon({ filled }: { filled: boolean }) {
@@ -30,6 +33,9 @@ function HeartIcon({ filled }: { filled: boolean }) {
 }
 
 export default function Profile() {
+  const nav = useNavigate();
+  const { getToken } = useAuth();
+
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -68,18 +74,40 @@ export default function Profile() {
 
     setDeletingId(id);
     try {
+      const token = await getToken();
+      if (!token) {
+        localStorage.setItem("toast", "Please login first 🔐");
+        nav("/login");
+        return;
+      }
+
       const res = await fetch(`${import.meta.env.VITE_API_URL}/recipes/${id}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
+      if (res.status === 401) {
+        localStorage.setItem("toast", "Session expired — please login again 🔐");
+        nav("/login");
+        return;
+      }
+
+      if (res.status === 403) {
+        alert("You can only delete your own recipes.");
+        return;
+      }
+
       if (!res.ok) throw new Error("Failed to delete");
+
       await load();
     } finally {
       setDeletingId(null);
     }
   }
 
-  function onToggleFavorite(e: React.MouseEvent, id: string) {
+  function onToggleFavorite(e: MouseEvent, id: string) {
     e.preventDefault();
     e.stopPropagation();
     toggleFavorite(id);
@@ -92,7 +120,7 @@ export default function Profile() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Your recipes + favorites (local — later we’ll connect users).
+            Your recipes + favorites (favorites are local).
           </p>
         </div>
 
@@ -183,7 +211,7 @@ export default function Profile() {
                       to={`/edit/${r.id}`}
                       className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center text-xs text-zinc-200 hover:bg-white/10"
                     >
-                      Edit (next)
+                      Edit
                     </Link>
                     <Link
                       to={`/recipe/${r.id}`}
