@@ -97,6 +97,16 @@ function withId(doc) {
 /* =========================
    Routes
 ========================= */
+// 🔎 DEBUG – check Firebase env on server
+app.get("/debug-auth", (req, res) => {
+  res.json({
+    firebaseReady,
+    hasEnv: !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    envLength: process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+      ? process.env.FIREBASE_SERVICE_ACCOUNT_JSON.length
+      : 0,
+  });
+});
 
 // root
 app.get("/", (req, res) => {
